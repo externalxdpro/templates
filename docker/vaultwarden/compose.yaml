@@ -1,0 +1,17 @@
+services:
+  vaultwarden:
+    container_name: vaultwarden
+    image: vaultwarden/server:latest
+    # (Optional) Setup traefik proxy to use HTTPS
+    # Without this, the web interface will be inaccessible,
+    # but the bitwarden extension will still work
+    # labels:
+    #   - traefik.enable=true
+    #   - traefik.http.routers.vaultwarden-https.tls=true
+    #   - traefik.http.routers.vaultwarden-https.entrypoints=websecure
+    #   - traefik.http.routers.vaultwarden-https.rule=Host(`vaultwarden.crysis.local`)
+    ports:
+      - 8001:80
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
