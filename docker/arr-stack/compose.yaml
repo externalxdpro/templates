@@ -1,0 +1,150 @@
+services:
+  # VPN service, see https://github.com/qdm12/gluetun-wiki/
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ./gluetun:/gluetun
+    environment:
+      # (Required) Set VPN settings (this is for HotspotShield)
+      - VPN_SERVICE_PROVIDER=custom
+      - VPN_TYPE=openvpn
+      - OPENVPN_CUSTOM_CONFIG=/gluetun/custom.conf
+      - OPENVPN_USER=${OPENVPN_USER}
+      - OPENVPN_PASSWORD=${OPENVPN_PASSWORD}
+      - OPENVPN_CUSTOM_ARGUMENTS=--pull-filter ignore connection-reset --pull-filter ignore route-ipv6 --pull-filter ignore ifconfig-ipv6 --auth-nocache
+      - DOT=off
+      - DNS_SERVERS=8.8.8.8,8.8.4.4
+      - FIREWALL=on
+      - FIREWALL_DEBUG=off
+      - FIREWALL_VPN_INPUT_PORTS=8041
+      - FIREWALL_OUTBOUND_SUBNETS=192.168.1.0/24
+      - TZ=America/Toronto
+      - UPDATER_PERIOD=24h
+    ports:
+      - 6881:8000
+      - 8085:8085 # qbittorrent
+      - 5030:5030 # slskd web ui
+      - 50300:50300 # slskd incoming connections
+
+  # Torrent client, see https://docs.linuxserver.io/images/docker-qbittorrent/
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent
+    container_name: qbittorrent
+    network_mode: "service:gluetun"
+    environment:
+      - TZ=America/Toronto
+      - WEBUI_PORT=8085
+    volumes:
+      - ./qbittorrent/config:/config
+      - ./qbittorrent/downloads:/downloads
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+  # Soulseek client, see https://github.com/slskd/slskd
+  slskd:
+    image: slskd/slskd
+    container_name: slskd
+    environment:
+      - TZ=America/Toronto
+      - SLSKD_REMOTE_CONFIGURATION=true
+      - SLSKD_UMASK=000
+    network_mode: "service:gluetun"
+    volumes:
+      - ./slskd:/app
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+  # See https://docs.linuxserver.io/images/docker-bazarr/
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./bazarr:/config
+      - /multimedia/Video:/multimedia
+    restart: unless-stopped
+    ports:
+      - 6767:6767
+
+  # Cloudflare resolver, see https://github.com/FlareSolverr/FlareSolverr/
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    restart: unless-stopped
+    environment:
+      - LOG_LEVEL=info
+    ports:
+      - 8191:8191
+
+  # See https://github.com/blampe/hearring-aid/
+  lidarr:
+    image: blampe/lidarr:lidarr-plugins-2.13.1.4678 # Plugins branch needed for slskd plugin
+    container_name: lidarr
+    volumes:
+      - ./lidarr:/config
+      - /multimedia/Music:/music
+      - ./qbittorrent/downloads:/downloads
+      - ./slskd/downloads:/app/downloads
+    restart: unless-stopped
+    environment:
+      - TZ=America/Toronto
+      - UMASK=000
+    ports:
+      - 8686:8686
+
+  # See https://github.com/Dictionarry-Hub/profilarr/
+  profilarr:
+    image: santiagosayshey/profilarr:latest
+    container_name: profilarr
+    volumes:
+      - ./profilarr:/config
+    restart: unless-stopped
+    environment:
+      - TZ=America/Toronto
+    ports:
+      - 6868:6868
+
+  # See https://docs.linuxserver.io/images/docker-prowlarr/
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    volumes:
+      - ./prowlarr:/config
+    restart: unless-stopped
+    ports:
+      - 9696:9696
+
+  # See https://docs.linuxserver.io/images/docker-radarr/
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./radarr/config:/config
+      - ./radarr/data:/data
+      - /multimedia/Video:/multimedia
+      - ./qbittorrent/downloads:/downloads
+    restart: unless-stopped
+    ports:
+      - 7878:7878
+
+  # See https://docs.linuxserver.io/images/docker-sonarr/
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./sonarr/config:/config
+      - ./sonarr/data:/data
+      - /multimedia/Video:/multimedia
+      - ./qbittorrent/downloads:/downloads
+    restart: unless-stopped
+    ports:
+      - 8989:8989
